@@ -384,3 +384,7 @@ button .icon,a .icon{pointer-events:none}
 @media(max-width:1100px){.motion-toggle .motion-label{display:none}}
 @media(max-width:900px){.hero-actions{flex-wrap:wrap}.hero-actions .button{white-space:nowrap}.dash-kpis small{font-size:11px}}
 .dash-kpis small{font-size:11px}
+/* Keep decorative CSS animations idle outside the viewport and in background tabs. */
+.page-inactive *,.page-inactive *::before,.page-inactive *::after,
+.effects-out-of-view,.effects-out-of-view::before,.effects-out-of-view::after,
+.effects-out-of-view *,.effects-out-of-view *::before,.effects-out-of-view *::after{animation-play-state:paused!important}
