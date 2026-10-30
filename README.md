@@ -21,6 +21,18 @@ python3 -m http.server 8080 --directory dist
 
 Then open `http://localhost:8080`.
 
+## Performance checks
+
+The decorative sphere caches its grid geometry, batches canvas strokes by depth, and pauses outside the viewport or in a background tab. Decorative CSS animations pause under the same conditions. Process scrolling reads card positions together before updating styles and combines scroll and resize work into one animation frame.
+
+Run the dependency-free JavaScript checks with Node.js:
+
+```sh
+node tests/motion.test.js
+```
+
+The checks cover the canvas drawing budget, animation lifecycle, reduced motion, resizing, browser API fallbacks, and process scrolling. They use browser API doubles; visual rendering still needs a browser check. Node.js is only needed for these checks, not for serving the portfolio.
+
 ## Files
 
 | File | Purpose |

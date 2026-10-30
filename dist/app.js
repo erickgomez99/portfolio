@@ -151,13 +151,15 @@ byId('walk-previous').addEventListener('click',()=>setWalk(currentWalk-1));
 byId('walk-next').addEventListener('click',()=>setWalk(currentWalk+1));
 
 const stageLabels=['Understand the operation','Build for the actual job','Validate the output','Hand over the workflow'];
+const stageButtons=[...document.querySelectorAll('[data-stage]')];
+const processCards=[...document.querySelectorAll('[data-process-card]')];
 function setStage(index) {
  activeStage=index;
- document.querySelectorAll('[data-stage]').forEach(button=>{
+ stageButtons.forEach(button=>{
   const active=Number(button.dataset.stage)===index;
   button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));
  });
- document.querySelectorAll('[data-process-card]').forEach(card=>card.classList.toggle('active',Number(card.dataset.processCard)===index));
+ processCards.forEach(card=>card.classList.toggle('active',Number(card.dataset.processCard)===index));
  byId('process-status').textContent=`0${index+1} / ${stageLabels[index]}`;
 }
 document.querySelectorAll('[data-stage]').forEach(button=>button.addEventListener('click',()=>{
@@ -168,15 +170,21 @@ function updateScrollEffects() {
  scrollScheduled=false;
  if(currentPanel!=='process')return;
  let nearest=0,distance=Infinity;
- document.querySelectorAll('[data-process-card]').forEach(card=>{
+ // Read every card before changing styles, so scrolling does not interleave layout reads and writes.
+ const offsets=processCards.map(card=>{
   const r=card.getBoundingClientRect();
-  const offset=r.top+r.height/2-window.innerHeight*.55;
+  return r.top+r.height/2-window.innerHeight*.55;
+ });
+ processCards.forEach((card,index)=>{
+  const offset=offsets[index];
   if(Math.abs(offset)<distance){distance=Math.abs(offset);nearest=Number(card.dataset.processCard);}
   card.style.setProperty('--drift',motionEnabled?Math.max(-10,Math.min(10,offset*.035))+'px':'0px');
  });
  if(nearest!==activeStage)setStage(nearest);
 }
-window.addEventListener('scroll',()=>{if(currentPanel==='process'&&!scrollScheduled){scrollScheduled=true;requestAnimationFrame(updateScrollEffects);}},{passive:true});
+function scheduleScrollEffects(){if(currentPanel==='process'&&!scrollScheduled){scrollScheduled=true;requestAnimationFrame(updateScrollEffects);}}
+window.addEventListener('scroll',scheduleScrollEffects,{passive:true});
+window.addEventListener('resize',scheduleScrollEffects);
 
 function openContact(type) {
  if(projectDialog.open)projectDialog.close();
@@ -205,7 +213,13 @@ byId('copy-brief').addEventListener('click',async()=>{
 const canvas=byId('data-orb');
 const ctx=canvas.getContext('2d');
 let orbFrame=0,orbAngle=0,lastDraw=0,orbWidth=0,orbHeight=0;
+let orbVisible=!('IntersectionObserver' in window);
 const spherePoints=Array.from({length:650},(_,i)=>{const y=1-(i/649)*2;const r=Math.sqrt(1-y*y);const theta=Math.PI*(3-Math.sqrt(5))*i;return{x:Math.cos(theta)*r,y,z:Math.sin(theta)*r};});
+// Cache the fixed grid geometry and group strokes by depth instead of stroking every segment.
+const orbGrid=[
+ {paths:Array.from({length:5},(_,lat)=>{const y=(lat-2)*.28,rr=Math.sqrt(1-y*y);return Array.from({length:101},(_,i)=>{const a=i/100*Math.PI*2;return{x:Math.cos(a)*rr,y,z:Math.sin(a)*rr};});}),base:.045,range:.045},
+ {paths:Array.from({length:5},(_,mer)=>{const a=mer/5*Math.PI;return Array.from({length:101},(_,i)=>{const t=i/100*Math.PI*2;return{x:Math.cos(t)*Math.cos(a),y:Math.sin(t),z:Math.cos(t)*Math.sin(a)};});}),base:.035,range:.035}
+].map(group=>({...group,buckets:Array.from({length:8},()=>[]),styles:Array.from({length:8},(_,i)=>`rgba(139,193,151,${group.base+(i+.5)/4*group.range})`)}));
 function drawOrb() {
  if(!ctx||!orbWidth||!orbHeight)return;
  const w=orbWidth,h=orbHeight,r=Math.min(w,h)*.335,cx=w*.5,cy=h*.5;
@@ -213,26 +227,45 @@ function drawOrb() {
  const cos=Math.cos(orbAngle),sin=Math.sin(orbAngle);
  function project(x,y,z){const rx=x*cos+z*sin,rz=-x*sin+z*cos;const ry=y*.95-rz*.22;const depth=y*.22+rz*.95;const scale=1+depth*.12;return{x:cx+rx*r*scale,y:cy+ry*r*scale,z:depth};}
  ctx.lineWidth=.65;
- for(let lat=-2;lat<=2;lat++){
-  const y=lat*.28;const rr=Math.sqrt(1-y*y);let last=null;
-  for(let i=0;i<=100;i++){const a=i/100*Math.PI*2;const p=project(Math.cos(a)*rr,y,Math.sin(a)*rr);if(last){ctx.strokeStyle=`rgba(139,193,151,${.045+(p.z+1)*.045})`;ctx.beginPath();ctx.moveTo(last.x,last.y);ctx.lineTo(p.x,p.y);ctx.stroke();}last=p;}
- }
- for(let mer=0;mer<5;mer++){
-  const a=mer/5*Math.PI;let last=null;
-  for(let i=0;i<=100;i++){const t=i/100*Math.PI*2;const p=project(Math.cos(t)*Math.cos(a),Math.sin(t),Math.cos(t)*Math.sin(a));if(last){ctx.strokeStyle=`rgba(139,193,151,${.035+(p.z+1)*.035})`;ctx.beginPath();ctx.moveTo(last.x,last.y);ctx.lineTo(p.x,p.y);ctx.stroke();}last=p;}
- }
+ orbGrid.forEach(group=>{
+  group.buckets.forEach(bucket=>{bucket.length=0;});
+  group.paths.forEach(path=>{
+   let last=null;
+   path.forEach(point=>{
+    const p=project(point.x,point.y,point.z);
+    if(last)group.buckets[Math.max(0,Math.min(7,Math.floor((p.z+1)*4)))].push(last.x,last.y,p.x,p.y);
+    last=p;
+   });
+  });
+  group.buckets.forEach((segments,index)=>{
+   if(!segments.length)return;
+   ctx.strokeStyle=group.styles[index];ctx.beginPath();
+   for(let i=0;i<segments.length;i+=4){ctx.moveTo(segments[i],segments[i+1]);ctx.lineTo(segments[i+2],segments[i+3]);}
+   ctx.stroke();
+  });
+ });
  spherePoints.map(p=>project(p.x,p.y,p.z)).sort((a,b)=>a.z-b.z).forEach((p,i)=>{
   const bright=(p.z+1)*.5;ctx.fillStyle=`rgba(${130+Math.round(bright*60)},${172+Math.round(bright*55)},${142+Math.round(bright*52)},${.1+bright*.65})`;ctx.beginPath();ctx.arc(p.x,p.y,.35+bright*.85,0,Math.PI*2);ctx.fill();
   if(i%97===0&&p.z>.1){ctx.strokeStyle='rgba(169,225,180,.2)';ctx.lineWidth=.7;ctx.beginPath();ctx.arc(p.x,p.y,3.5,0,Math.PI*2);ctx.stroke();}
  });
  ctx.strokeStyle='rgba(133,195,149,.08)';ctx.lineWidth=.7;ctx.beginPath();ctx.ellipse(cx,cy,r*1.26,r*.32,-.35,0,Math.PI*2);ctx.stroke();
 }
-function animateOrb(time){orbFrame=0;if(currentPanel!=='overview'||document.hidden)return;if(time-lastDraw>33){orbAngle+=.0017;drawOrb();lastDraw=time;}if(motionEnabled)orbFrame=requestAnimationFrame(animateOrb);}
-function refreshOrb(){if(orbFrame)cancelAnimationFrame(orbFrame);orbFrame=0;if(currentPanel==='overview'){drawOrb();if(motionEnabled&&!document.hidden)orbFrame=requestAnimationFrame(animateOrb);}}
-function resizeOrb(){const rect=canvas.getBoundingClientRect();if(!rect.width||!rect.height)return;orbWidth=rect.width;orbHeight=rect.height;const ratio=Math.min(window.devicePixelRatio||1,2);canvas.width=Math.round(orbWidth*ratio);canvas.height=Math.round(orbHeight*ratio);if(ctx)ctx.setTransform(ratio,0,0,ratio,0,0);drawOrb();}
+function orbIsActive(){return ctx&&orbVisible&&currentPanel==='overview'&&!document.hidden;}
+function animateOrb(time){orbFrame=0;if(!orbIsActive()||!motionEnabled)return;if(time-lastDraw>33){orbAngle+=.0017;drawOrb();lastDraw=time;}orbFrame=requestAnimationFrame(animateOrb);}
+function refreshOrb(){if(orbFrame)cancelAnimationFrame(orbFrame);orbFrame=0;if(orbIsActive()){drawOrb();if(motionEnabled)orbFrame=requestAnimationFrame(animateOrb);}}
+function resizeOrb(){const rect=canvas.getBoundingClientRect();if(!rect.width||!rect.height)return;const ratio=Math.min(window.devicePixelRatio||1,2);const width=Math.round(rect.width*ratio),height=Math.round(rect.height*ratio);if(orbWidth===rect.width&&orbHeight===rect.height&&canvas.width===width&&canvas.height===height)return;orbWidth=rect.width;orbHeight=rect.height;canvas.width=width;canvas.height=height;if(ctx)ctx.setTransform(ratio,0,0,ratio,0,0);if(orbIsActive())drawOrb();}
 new ResizeObserver(resizeOrb).observe(canvas);
-document.addEventListener('visibilitychange',refreshOrb);
+if('IntersectionObserver' in window){
+ const effectsObserver=new IntersectionObserver(entries=>entries.forEach(entry=>{
+  if(entry.target===canvas){orbVisible=entry.isIntersecting;refreshOrb();}
+  else entry.target.classList.toggle('effects-out-of-view',!entry.isIntersecting);
+ }));
+ effectsObserver.observe(canvas);
+ document.querySelectorAll('.hero-art,.tools-band,.teaser-orb,.footer-contact').forEach(element=>effectsObserver.observe(element));
+}
+function updatePageVisibility(){document.body.classList.toggle('page-inactive',document.hidden);refreshOrb();}
+document.addEventListener('visibilitychange',updatePageVisibility);
 function applyMotion(){document.body.classList.toggle('motion-paused',!motionEnabled);const button=byId('motion-toggle');button.setAttribute('aria-pressed',String(motionEnabled));button.setAttribute('aria-label',motionEnabled?'Pause visual effects':'Enable visual effects');button.innerHTML=`<span aria-hidden="true">${motionEnabled?'<svg class="icon icon-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 5v14M15 5v14"/></svg>':'<svg class="icon icon-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m8 5 11 7-11 7Z"/></svg>'}</span><span class="motion-label">Motion ${motionEnabled?'on':'off'}</span>`;refreshOrb();updateScrollEffects();}
 byId('motion-toggle').addEventListener('click',()=>{motionEnabled=!motionEnabled;applyMotion();});
 reducedMotion.addEventListener('change',event=>{motionEnabled=!event.matches;applyMotion();});
-routeFromHash();resizeOrb();applyMotion();
+routeFromHash();resizeOrb();applyMotion();updatePageVisibility();
