@@ -1,0 +1,39 @@
+Footer layout adaptation
+
+Native HTML/CSS adaptation of Footer / footer-01 by nevsky118, as linked from
+https://21st.dev/@nevsky118/components/footer
+Public source: https://github.com/shadcn-ui/ui/pull/6395/files
+The original brand/social-navigation/copyright structure was adapted to this
+portfolio. Placeholder social and legal links were replaced with real site actions.
+
+MIT License
+
+Copyright (c) 2023 shadcn
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Design references (no source copied)
+
+Original native implementations inspired by:
+- How It Works by chamaac: https://21st.dev/@chamaac/components/how-it-works
+- Gooey Blobs by animbits: https://21st.dev/@animbits/components/loaders-gooey-blobs
+- Parallax Scroll Feature Section by Sumona Biswas:
+  https://21st.dev/@sumonadotwork/components/parallax-scroll-feature-section
+
+Their 21st.dev component source required an account and was not copied.
